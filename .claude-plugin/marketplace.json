@@ -1,0 +1,14 @@
+{
+  "name": "pipeline-local",
+  "owner": {
+    "name": "Timm at SiFly"
+  },
+  "plugins": [
+    {
+      "name": "pipeline",
+      "version": "0.1.0",
+      "source": "./pipeline",
+      "description": "LLM-native development pipeline. Five session orchestrators plus a cross-cutting LLM Ops maintainer."
+    }
+  ]
+}
