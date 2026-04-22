@@ -6,6 +6,9 @@
 # v0.1.0 behavior: accepts manual customer-facing release notes when Build's
 # Marketing wrapper is deferred; voice-check is advisory, not gating.
 #
+# Also validates the sibling 04-punchlist.json if present, by shelling out to
+# check-punchlist.sh. Any RED from the punchlist checker bubbles up to RED here.
+#
 # Usage:
 #   check-ship.sh <path-to-04-ship.md>
 #
@@ -25,6 +28,9 @@ if [[ ! -f "$SHIP" ]]; then
   echo "ERROR: file not found: $SHIP" >&2
   exit 2
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHECK_PUNCHLIST="$SCRIPT_DIR/check-punchlist.sh"
 
 RED=()
 YELLOW=()
@@ -46,7 +52,13 @@ fi
 
 # --- frontmatter fields ------------------------------------------------------
 
-REQUIRED_FIELDS=(session feature_id project owner status inputs updated regulated customer_facing_launch deploy_url deploy_state watch_window_task_id)
+REQUIRED_FIELDS=(
+  session feature_id project owner status inputs updated
+  regulated customer_facing_launch
+  deploy_url deploy_state
+  agentic_qa_coverage_pct punchlist_blocking_open punchlist_url
+  watch_window_task_id
+)
 for field in "${REQUIRED_FIELDS[@]}"; do
   if ! grep -qE "^${field}:" <<< "$FRONTMATTER"; then
     record_red "frontmatter missing required field: $field"
@@ -88,6 +100,30 @@ if [[ -n "$deploy_url_val" && ! "$deploy_url_val" =~ ^https?:// ]]; then
   record_red "frontmatter deploy_url='$deploy_url_val' must start with http:// or https://"
 fi
 
+# agentic_qa_coverage_pct must be integer 0-100
+aqa_val=$( (grep -E "^agentic_qa_coverage_pct:" <<< "$FRONTMATTER" || true) | head -1 | sed "s/^agentic_qa_coverage_pct:[[:space:]]*//" | tr -d '[:space:]' )
+if [[ -n "$aqa_val" ]]; then
+  if ! [[ "$aqa_val" =~ ^[0-9]+$ ]]; then
+    record_red "frontmatter agentic_qa_coverage_pct='$aqa_val' must be a non-negative integer"
+  elif (( aqa_val > 100 )); then
+    record_red "frontmatter agentic_qa_coverage_pct='$aqa_val' must be ≤ 100"
+  elif (( aqa_val < 50 )); then
+    record_yellow "frontmatter agentic_qa_coverage_pct=$aqa_val is below 50% — review whether agentic pass is under-configured or feature is under-specified"
+  fi
+fi
+
+# punchlist_blocking_open must be non-negative integer
+pbo_val=$( (grep -E "^punchlist_blocking_open:" <<< "$FRONTMATTER" || true) | head -1 | sed "s/^punchlist_blocking_open:[[:space:]]*//" | tr -d '[:space:]' )
+if [[ -n "$pbo_val" ]] && ! [[ "$pbo_val" =~ ^[0-9]+$ ]]; then
+  record_red "frontmatter punchlist_blocking_open='$pbo_val' must be a non-negative integer"
+fi
+
+# punchlist_url must be URL-ish and point at the web app
+purl_val=$( (grep -E "^punchlist_url:" <<< "$FRONTMATTER" || true) | head -1 | sed "s/^punchlist_url:[[:space:]]*//" | tr -d '[:space:]' )
+if [[ -n "$purl_val" && ! "$purl_val" =~ ^https?:// ]]; then
+  record_red "frontmatter punchlist_url='$purl_val' must start with http:// or https://"
+fi
+
 # watch_window_task_id must be non-empty
 wwid_val=$( (grep -E "^watch_window_task_id:" <<< "$FRONTMATTER" || true) | head -1 | sed "s/^watch_window_task_id:[[:space:]]*//" | tr -d '[:space:]' )
 if [[ -z "$wwid_val" ]]; then
@@ -107,6 +143,8 @@ require_h2 "Preflight"
 require_h2 "Migrations"
 require_h2 "Deploy"
 require_h2 "Smoke"
+require_h2 "Agentic QA"
+require_h2 "Punchlist"
 require_h2 "Observability"
 require_h2 "Watch window"
 require_h2 "Rollback"
@@ -147,6 +185,46 @@ SMOKE_BLOCK=$(section_body "Smoke")
 SMOKE_CONTENT=$(grep -vE '^[[:space:]]*$' <<< "$SMOKE_BLOCK" || true)
 if [[ -z "$SMOKE_CONTENT" ]]; then
   record_red "Smoke section is empty (need at least a read path + a write path with timestamps)"
+fi
+
+# --- Agentic QA section: required inner markers -----------------------------
+
+AQA_BLOCK=$(section_body "Agentic QA")
+AQA_CONTENT=$(grep -vE '^[[:space:]]*$' <<< "$AQA_BLOCK" || true)
+if [[ -z "$AQA_CONTENT" ]]; then
+  record_red "Agentic QA section is empty (need checks_run, AC coverage table, autonomous coverage %)"
+else
+  # Autonomous coverage percentage stated
+  grep -qiE 'autonomous coverage|coverage:.*%|coverage.*[0-9]+%' <<< "$AQA_BLOCK" \
+    || record_red "Agentic QA section missing 'Autonomous coverage' percentage"
+  # Checks run list
+  grep -qiE 'checks run|checks_run' <<< "$AQA_BLOCK" \
+    || record_red "Agentic QA section missing 'Checks run' list"
+  # AC coverage — require a table header with 'AC' + 'status' (or at least 'AC coverage')
+  grep -qiE 'ac coverage|ac[[:space:]]*id|\| AC' <<< "$AQA_BLOCK" \
+    || record_red "Agentic QA section missing AC coverage table"
+  # Findings (table or 'None — ...')
+  grep -qiE 'findings|None — agentic pass produced no findings' <<< "$AQA_BLOCK" \
+    || record_red "Agentic QA section missing 'Findings' block (use 'None — agentic pass produced no findings.' if truly zero)"
+fi
+
+# --- Punchlist section: required inner markers ------------------------------
+
+PL_BLOCK=$(section_body "Punchlist")
+PL_CONTENT=$(grep -vE '^[[:space:]]*$' <<< "$PL_BLOCK" || true)
+if [[ -z "$PL_CONTENT" ]]; then
+  record_red "Punchlist section is empty (need source path, web app URL, summary, schema check, gating)"
+else
+  grep -qiE '04-punchlist\.json' <<< "$PL_BLOCK" \
+    || record_red "Punchlist section missing source-of-truth path reference to 04-punchlist.json"
+  grep -qiE 'ship-punchlist-web\.vercel\.app|punchlist_url' <<< "$PL_BLOCK" \
+    || record_red "Punchlist section missing web app URL (ship-punchlist-web.vercel.app/...)"
+  grep -qiE 'blocking|watch|agent verified all AC' <<< "$PL_BLOCK" \
+    || record_red "Punchlist section missing blocking/watch summary"
+  grep -qiE 'schema check|check-punchlist' <<< "$PL_BLOCK" \
+    || record_yellow "Punchlist section doesn't record a schema check — run check-punchlist.sh and note the result"
+  grep -qiE 'gating|punchlist_gating|strict|advisory' <<< "$PL_BLOCK" \
+    || record_red "Punchlist section missing gating mode (strict|advisory)"
 fi
 
 # --- Observability section: required inner markers --------------------------
@@ -199,15 +277,19 @@ else
   fi
 fi
 
-# --- Promotion: both fields addressed ---------------------------------------
+# --- Promotion: all three fields addressed ----------------------------------
 
 PROM_BLOCK=$(section_body "Promotion")
 PROM_CONTENT=$(grep -vE '^[[:space:]]*$' <<< "$PROM_BLOCK" || true)
 if [[ -z "$PROM_CONTENT" ]]; then
-  record_red "Promotion section is empty (must address repo_brief_dir + changelog_path, even if N/A)"
+  record_red "Promotion section is empty (must address repo_brief_dir + changelog_path + punchlist mirror)"
 else
   grep -qiE 'repo_brief_dir|brief' <<< "$PROM_BLOCK" || record_red "Promotion section does not address brief promotion (pipeline.repo_brief_dir)"
   grep -qiE 'changelog' <<< "$PROM_BLOCK" || record_red "Promotion section does not address changelog append (pipeline.changelog_path)"
+  grep -qiE 'punchlist.*mirror|\.punchlist/|mirror.*punchlist' <<< "$PROM_BLOCK" \
+    || record_red "Promotion section does not record punchlist mirror (always written, not optional)"
+  grep -qiE 'v1 pointer|short_sha|pointer' <<< "$PROM_BLOCK" \
+    || record_red "Promotion section does not record V1 pointer file (always written for pre-push hook compat)"
 fi
 
 # --- Sign-off: non-empty ----------------------------------------------------
@@ -224,6 +306,30 @@ if [[ "$regulated_val" == "true" ]]; then
   if ! grep -qiE 'regulated|escalat' <<< "$BODY"; then
     record_yellow "regulated=true but body never mentions 'regulated' or 'escalat' — verify Legal context is preserved from build-notes"
   fi
+fi
+
+# --- Sibling punchlist.json validation --------------------------------------
+
+SHIP_DIR=$(cd "$(dirname "$SHIP")" && pwd)
+PUNCHLIST_PATH="$SHIP_DIR/04-punchlist.json"
+if [[ -f "$PUNCHLIST_PATH" ]]; then
+  if [[ -x "$CHECK_PUNCHLIST" ]]; then
+    echo "--- running check-punchlist.sh on sibling 04-punchlist.json ---"
+    set +e
+    bash "$CHECK_PUNCHLIST" "$PUNCHLIST_PATH"
+    pl_rc=$?
+    set -e
+    echo "--- check-punchlist.sh exit=$pl_rc ---"
+    if (( pl_rc == 1 )); then
+      record_red "sibling 04-punchlist.json failed check-punchlist.sh (see output above)"
+    elif (( pl_rc == 2 )); then
+      record_red "check-punchlist.sh usage error on $PUNCHLIST_PATH"
+    fi
+  else
+    record_yellow "check-punchlist.sh not found or not executable at $CHECK_PUNCHLIST — skipping sibling JSON validation"
+  fi
+else
+  record_red "sibling 04-punchlist.json not found at $PUNCHLIST_PATH — Phase 4 must always write this file (use items: [] if nothing residual)"
 fi
 
 # --- report -----------------------------------------------------------------

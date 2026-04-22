@@ -13,16 +13,24 @@ Run this before surfacing to Timm. No shortcuts. This is touchpoint #4.
    - `regulated`, `customer_facing_launch` copied from brief (must be literal `true` / `false`)
    - `deploy_url` set
    - `deploy_state: READY`
+   - `agentic_qa_coverage_pct` set (integer 0–100)
+   - `punchlist_blocking_open` set (integer ≥ 0)
+   - `punchlist_url` set (feature-scoped web app URL)
    - `watch_window_task_id` set
 3. Deploy state is `READY` via the platform MCP — not just "pushed to main". The verification call + response snippet is in the `## Deploy` section.
 4. Production smoke has both a read and a write path recorded, with timestamps. Evidence, not "LGTM".
-5. Observability: critical path listed, correlation ID field named, named metrics with dimensions, ≥1 alert with a named route, dashboard URL recorded.
-6. Watch window: `task_id` returned from `schedule` skill, `cohort_id`, `opens_at`, `closes_at` all recorded. No task_id = stop, surface to Timm.
-7. Rollback plan present with trigger, steps, ETA, owner. Not aspirational — actual commands / MCP calls.
-8. Release notes: internal draft present. Customer-facing draft present per brief's `customer_facing_launch` flag (manually authored in v0.1.0 if Build's Marketing wrapper is deferred, and noted as such).
-9. Promotion: both fields addressed (either action taken + recorded, or `N/A — not declared`).
-10. Manifest updated: `04-ship: ready-for-signoff`, deploy URL, dashboard URL, watch-window task_id recorded.
-11. `bash scripts/check-ship.sh <FEATURE_DIR>/04-ship.md` — no RED.
+5. Agentic QA: `## Agentic QA` section present with `checks_run`, AC coverage table (every brief AC accounted for), findings table (or `None — agentic pass produced no findings.`), autonomous coverage %. Any open `blocking` finding = STOP, surface to Timm (Phase 3 should have paused — contract break if you got here).
+6. Punchlist: `04-punchlist.json` exists, passes `check-punchlist.sh` (no RED), schema_version is `"2"`. `## Punchlist` section in `04-ship.md` records the web app URL, blocking/watch counts, schema check result, and gating mode.
+7. Observability: critical path listed, correlation ID field named, named metrics with dimensions, ≥1 alert with a named route, dashboard URL recorded.
+8. Watch window: `task_id` returned from `schedule` skill, `cohort_id`, `opens_at`, `closes_at` all recorded. No task_id = stop, surface to Timm.
+9. Rollback plan present with trigger, steps, ETA, owner. Not aspirational — actual commands / MCP calls.
+10. Release notes: internal draft present. Customer-facing draft present per brief's `customer_facing_launch` flag (manually authored in v0.1.0 if Build's Marketing wrapper is deferred, and noted as such).
+11. Promotion: all three fields addressed — `repo_brief_dir` (action or `N/A — not declared`), `changelog_path` (action or `N/A — not declared`), **punchlist mirror + V1 pointer always written** (not optional).
+12. Manifest updated: `04-ship: ready-for-signoff`, deploy URL, dashboard URL, watch-window task_id, punchlist URL recorded.
+13. `bash scripts/check-ship.sh <FEATURE_DIR>/04-ship.md` — no RED.
+14. **Sign-off gating check.** Consult `pipeline.punchlist_gating` in `<PROJECT>/CLAUDE.md` (default `strict`):
+    - `strict` → any `items[].severity: blocking` open blocks sign-off. Do NOT surface the close message; instead, surface the blocker list and ask Timm to address them (or override).
+    - `advisory` → surface the count in the close message but proceed. Log the override + reason to `lessons.md` on close.
 
 ## Surface-to-Timm message (verbatim template)
 
@@ -36,6 +44,15 @@ Project: <project>
 - Prod URL: <deploy_url>
 - Deploy state: READY (verified via <platform MCP> at <timestamp>)
 - Smoke: read + write paths green at <timestamp>
+
+**Agentic QA.**
+- Autonomous coverage: <N>% (<verified>/<total> AC verified)
+- Checks run: <comma-separated list>
+- Findings: <N watch, 0 blocking> (blocking always 0 here — Phase 3 pauses otherwise)
+
+**Punchlist.**
+- <N blocking, M watch> — `<https://ship-punchlist-web.vercel.app/<owner>/<repo>/feature/<feature_id>>`
+- Gating: `<strict | advisory>` (<reason if advisory>)
 
 **Observability wired.**
 - Critical path: <N> steps, correlation ID `<field>`
@@ -55,16 +72,19 @@ Project: <project>
 **Promotion.**
 - Brief: <copied to <path> | N/A — not declared>
 - Changelog: <appended to <path> | N/A — not declared>
+- Punchlist mirror: `<project-repo>/.punchlist/<feature_id>.json` + V1 pointer `<short_sha>.json`
 
 **Rollback.** Trigger, steps, ETA, owner captured in § Rollback.
 
 Artifact: <FEATURE_DIR>/04-ship.md
+Artifact: <FEATURE_DIR>/04-punchlist.json
 
 Reply "signed off" to flip manifest + 04-ship.md to `shipped`.
 Reply with changes and I'll cycle before closing.
 
 [if regulated=true: append] ⚠ Regulated surface — preserved escalation text in build-notes; no Legal wrapper in v0.1.0.
 [if customer_facing_launch=true and manual draft: append] ⚠ Customer-facing copy authored manually in v0.1.0 (Build Marketing wrapper deferred). Read the customer-facing note before signing off.
+[if punchlist_blocking_open>0 AND gating=advisory: append] ⚠ <N> open blocking punchlist items — gating override is `advisory`. Reason: <reason from CLAUDE.md or lessons.md>. Review before signing.
 ```
 
 ## Post-sign-off (after Timm replies "signed off" / "approved")

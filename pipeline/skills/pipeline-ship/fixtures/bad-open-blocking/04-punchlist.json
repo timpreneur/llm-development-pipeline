@@ -1,0 +1,44 @@
+{
+  "schema_version": "2",
+  "schema": {
+    "version": "2",
+    "generator": "pipeline-ship@0.1.0"
+  },
+  "feature_id": "2026-04-19-bad-open-blocking",
+  "project": "sifly-fixture",
+  "short_sha": "aaaaaaa",
+  "full_sha": "aaaaaaa1111111111111111111111111111aaaa",
+  "deploy_url": "https://fixture-open-blocking.example",
+  "deploy_state": "READY",
+  "title": "Fixture: Open Blocking Finding",
+  "created_at": "2026-04-19T18:34:00Z",
+  "agentic_pass": {
+    "completed_at": "2026-04-19T18:34:00Z",
+    "autonomous_coverage_pct": 100,
+    "checks_run": [
+      "chrome_navigate",
+      "console",
+      "network",
+      "http_smoke"
+    ],
+    "ac_coverage": [
+      {
+        "ac_id": "AC1",
+        "text": "Endpoint returns 200",
+        "verification": "http_smoke",
+        "status": "verified",
+        "evidence": "GET /api/health \u2192 200"
+      }
+    ],
+    "findings": [
+      {
+        "id": "auto-1",
+        "severity": "blocking",
+        "source": "console",
+        "text": "Uncaught TypeError on /admin/dashboard",
+        "status": "open"
+      }
+    ]
+  },
+  "items": []
+}

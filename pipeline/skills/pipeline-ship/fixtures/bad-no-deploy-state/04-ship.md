@@ -1,7 +1,7 @@
 ---
 session: 04-ship
 feature_id: 2026-04-19-bad-example-no-deploy-state
-project: example-fixture
+project: sifly-fixture
 owner: timm
 status: ready-for-signoff
 inputs: [00-manifest.md, 01-brief.md, 02-plan.md, 03-build-notes.md]
