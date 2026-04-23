@@ -11,13 +11,24 @@ Touchpoint: **Timm approves the plan.** That's the done-signal — no Build sess
 
 ## When to invoke
 
-Invoke when Timm opens Claude Code in plan mode to plan an approved feature. Typical triggers:
+This skill has two modes.
+
+**Mode 1 — New plan** (the default). Invoke when Timm opens Claude Code in plan mode to plan an approved feature. Typical triggers:
 
 - "Start a Plan session for `<FEATURE_ID>`."
 - "Plan this feature." (after Ideate closed)
 - "Run session 02."
 - "Open Claude Code in plan mode for `<FEATURE_ID>`."
 - The startup prompt in `startup-prompt.md` is pasted in.
+
+**Mode 2 — Diagnose a Plan Issue.** Invoke when `<FEATURE_DIR>/02-plan-issue.md` exists with `status: open` and Timm hands it to you. Typical triggers:
+
+- "Diagnose the plan issue for `<FEATURE_ID>`."
+- "Build hit a blocker, triage it."
+- "Run plan-issue diagnosis."
+- Timm pastes the contents of `02-plan-issue.md` or references the filename.
+
+In Mode 2, skip Phase 2 (grep verification) except targeted re-greps tied to the issue. The full flow is in `references/plan-issue-diagnosis.md`.
 
 Don't invoke for: ideation (`pipeline-ideate`), execution (`pipeline-build`), ship, or research. Plan mode means **no writes** until ExitPlanMode — if Timm wants execution, this is the wrong skill.
 
@@ -48,11 +59,25 @@ Read in this order:
 
 ## Flow
 
-### Phase 1 — Read inputs in full
+### Mode 2 — Diagnose a Plan Issue
+
+If `<FEATURE_DIR>/02-plan-issue.md` exists with `status: open`, run the diagnosis flow in `references/plan-issue-diagnosis.md` instead of Mode 1. Summary:
+
+1. Read `02-plan-issue.md`, `02-plan.md`, `01-brief.md`, `03-build-notes.md` (if present).
+2. Classify the root cause (A/B/C/D/E). Apply the Clarity Test before finalizing D.
+3. Write a three-part diagnosis (classification, proposed revision, impact assessment). **Do not write to `02-plan.md` yet.** Show Timm the proposal first.
+4. On approval, update `02-plan.md`, append to `## Plan Revisions`, bump frontmatter `revision` + `updated`, delete `02-plan-issue.md`.
+5. Category C bounces to `01-brief-issue.md` (do not revise `02-plan.md`). Category D clears the issue without plan change.
+
+The diagnosis reference has the full protocol, the Clarity Test rules, and the templates for both `## Plan Revisions` entries and `01-brief-issue.md`.
+
+### Mode 1 — New plan
+
+#### Phase 1 — Read inputs in full
 
 No skimming. Decisions-needed entries from the brief are inputs to the plan, not afterthoughts. Each `[Plan]`-tagged decision must be resolved (or explicitly deferred to Open Questions) in this session.
 
-### Phase 2 — Grep verification
+#### Phase 2 — Grep verification
 
 For every pattern, primitive, file, component, table, route, or library the brief references or implies — **grep the repo and confirm it exists as expected.**
 
@@ -62,7 +87,7 @@ If a referenced thing doesn't exist or doesn't match the brief's assumption, **f
 
 See `references/verification-grep-guide.md` for the grep checklist (what to look for) and the log format.
 
-### Phase 3 — Produce the plan
+#### Phase 3 — Produce the plan
 
 Per `references/plan-template.md`. Required sections:
 
@@ -76,11 +101,11 @@ Per `references/plan-template.md`. Required sections:
 - `## Rollback` — how to undo if Ship reveals a defect. Required for production-affecting changes; "N/A — no production surface touched" is acceptable for internal-only changes if explicitly stated.
 - `## Open questions` — anything Plan couldn't resolve. Tag entries `[Timm]` (decision needed) or `[Build-discover]` (something Build needs to grep further).
 
-### Phase 4 — Show Timm, iterate
+#### Phase 4 — Show Timm, iterate
 
 Present the draft plan in Plan mode (no writes yet). Timm approves or asks for revisions. Loop until approved.
 
-### Phase 5 — ExitPlanMode → close
+#### Phase 5 — ExitPlanMode → close
 
 On approval:
 
@@ -119,6 +144,8 @@ If a pattern surfaces during planning (e.g., the same kind of grep keeps returni
 - `references/plan-template.md` — canonical `02-plan.md` shape with frontmatter and inline guidance per section.
 - `references/verification-grep-guide.md` — the grep checklist and log format.
 - `references/close-checklist.md` — step-by-step close procedure plus the full guardrail list.
+- `references/plan-issue-diagnosis.md` — Mode 2 diagnosis protocol: A/B/C/D/E categories, Clarity Test, Plan Revisions log format, `01-brief-issue.md` template for Category C escalation.
+- `../../ENGINEERING_STANDARDS.md` — shared coding floors. Planners respect these when specifying interfaces and constraints; Build enforces them at code time.
 
 ## Scripts
 

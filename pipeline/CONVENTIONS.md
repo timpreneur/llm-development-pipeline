@@ -92,6 +92,32 @@ Run `claude plugin validate .claude-plugin/plugin.json` as the last step of any 
 
 ---
 
-## 7. Writable surface
+## 7. Blocker artifacts (`NN-<name>-issue.md`)
+
+Any session that cannot proceed because of a problem owned by an earlier session writes a **blocker artifact** named `NN-<name>-issue.md` and stops. The `NN` matches the phase that owns the file being challenged (not the phase that filed it):
+
+| Artifact | Filed by | Resolves via | Lifecycle |
+|----------|----------|--------------|-----------|
+| `01-brief-issue.md` | `pipeline-plan` (Category C diagnosis) | `pipeline-ideate` brief revision | Deleted on brief update + plan re-diagnosis |
+| `02-plan-issue.md` | `pipeline-build` (unrecoverable plan problem) | `pipeline-plan` Mode 2 diagnosis | Deleted on plan revision or direct Timm instruction |
+
+**Shape.** YAML frontmatter with `session: NN-<name>-issue`, `status: open`, `filed_by:`, `filed_at:`, `feature_id:`, plus issue-specific fields. Body is a structured template owned by the filing skill (see its `references/` directory).
+
+**Lifecycle.**
+
+1. Filing skill writes the issue file and sets `00-manifest.md` row to `blocked` with `blocked_on: <issue-file>`.
+2. Filing skill stops. No workarounds, no partial work.
+3. Timm hands the issue to the resolving skill.
+4. Resolving skill diagnoses, proposes a fix, waits for Timm's approval.
+5. On approval, the authoritative document is updated (e.g., `02-plan.md` for a plan revision) and the audit trail is appended inline (e.g., `## Plan Revisions` inside `02-plan.md`). The issue file is deleted.
+6. Filing skill's manifest row returns to `in_progress` or `pending` depending on state.
+
+**Why a separate file, not a comment inline.** Keeps the authoritative document clean of in-flight noise, gives the resolving skill a single input to read, and makes the blocked state visible in the manifest without scanning prose.
+
+**Why single file, not numbered.** Concurrent open issues on the same feature are a signal that something bigger is wrong — stop and diagnose holistically before filing a second one. Audit trail lives in the resolved document's revision log, not in versioned issue files.
+
+---
+
+## 8. Writable surface
 
 Per-session SKILL.md files declare their writable surface explicitly under "Files you touch" / "Files you must not touch." Respect those boundaries. Cross-cutting LLM-Ops is the only role allowed to edit plugin source or the pipeline brief (`Code/.templates/llm-native-dev-pipeline-brief.md`), and only inside a `fix-session` after Timm approval.

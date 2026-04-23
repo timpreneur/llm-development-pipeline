@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "pipeline",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "source": "./pipeline",
       "description": "LLM-native development pipeline. Five session orchestrators plus a cross-cutting LLM Ops maintainer."
     }

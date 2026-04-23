@@ -64,7 +64,7 @@ Proceed task by task from `02-plan.md § Task list`. For each task:
 
 **Do not re-plan mid-execution.** If a task can't be executed as planned, either:
 - The deviation is small (an obvious micro-refactor, an extra import, a tighter type) → note it inline in the task's notes and continue.
-- The deviation is material (a planned reuse anchor doesn't work, the file layout differs from plan's `## Files touched`, an AC becomes unmeetable) → **pause and surface to Timm.**
+- The deviation is material (a planned reuse anchor doesn't work, the file layout differs from plan's `## Files touched`, an AC becomes unmeetable) → **file a Plan Issue and stop.** See `references/plan-issue-template.md` for when-to-file rules and the five-field structure. Do not attempt a workaround. Do not partially implement.
 
 ### Phase 2 — Internal checkpoints
 
@@ -106,10 +106,27 @@ If the project has no deploy integration declared, write `Preview URL: N/A — n
 Surface **only** if:
 
 1. A **critical security or legal finding blocks progress** (cannot deploy preview without Timm's call).
-2. An **acceptance criterion cannot be met as written** — the brief needs revision or the AC needs a technical workaround Timm would not approve silently.
-3. The **plan is drifting materially** from what the codebase now supports (codebase changed since plan; re-plan needed).
+2. An **acceptance criterion cannot be met as written** — file `02-plan-issue.md` with category guess C (if brief is ambiguous) or B (if plan is silent). See below.
+3. The **plan is drifting materially** from what the codebase now supports — file `02-plan-issue.md` with category guess A (plan error) or E (external change).
+
+For cases 2 and 3, the escalation channel is `02-plan-issue.md`, not a direct message. The structured file captures the context Plan needs to diagnose without Build re-explaining; Timm reads it and routes to pipeline-plan. See `references/plan-issue-template.md`.
 
 Everything else — code-opt findings, non-critical security, accessibility, UX polish, QA regressions you can fix — stays internal. Fix it, note it, continue.
+
+## When the plan has a problem — file a Plan Issue
+
+If during execution you find the plan is wrong, silent on something you need, or inconsistent with reality, **stop and file `02-plan-issue.md`.** Do not work around it. Do not make a judgment call.
+
+Filing protocol:
+
+1. Write `02-plan-issue.md` to `<FEATURE_DIR>` per `references/plan-issue-template.md`. Include your best category guess (A/B/C/D/E or "uncertain").
+2. Update `<FEATURE_DIR>/00-manifest.md`: Build row status → `blocked`, `blocked_on: 02-plan-issue.md`.
+3. Surface to Timm: "Blocked on `<FEATURE_DIR>/02-plan-issue.md`. Not proceeding until resolved."
+4. Stop. Wait for Timm to either hand you a revised `02-plan.md` (via a pipeline-plan diagnosis session) or a direct instruction.
+
+On resume, log the resolution in your next `03-build-notes.md § Commit range` entry and delete `02-plan-issue.md`. See the template for the resume protocol.
+
+**Why the hard-stop.** Silent workarounds surface at Ship time as preview-URL regressions that are expensive to unwind. A false-positive Plan Issue is cheap: Timm reads it, tells you to proceed. File when in doubt.
 
 ## Commit policy
 
@@ -147,6 +164,8 @@ Both cases: the validator accepts the `N/A — wrapper deferred` pattern so the 
 - `references/build-notes-template.md` — canonical `03-build-notes.md` shape with every required section.
 - `references/mode-checkpoints.md` — the internal flow diagram, invocation order, and per-mode scope.
 - `references/close-checklist.md` — step-by-step close procedure plus the full guardrail list.
+- `references/plan-issue-template.md` — when to file `02-plan-issue.md`, the five-field structure, and resume protocol.
+- `../../ENGINEERING_STANDARDS.md` — shared coding floors and optimization targets. Read once at session start.
 
 ## Scripts
 
